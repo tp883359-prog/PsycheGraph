@@ -8,6 +8,9 @@ their answers. Review the answers manually; transport success is not a semantic
 pass. No model, environment, or exception payload is printed.
 """
 
+# Public synthetic responses are the intended output of this manual-check CLI.
+# ruff: noqa: T201
+
 import asyncio
 import logging
 import os
@@ -43,9 +46,7 @@ async def main() -> None:
     for label, text in CASES:
         # The quotation challenge refers to the preceding Hamlet interpretation.
         history = histories["Case 3"] if label == "Case 5" else []
-        result = await graph.ainvoke(
-            {"messages": [*history, ("user", text)]}
-        )
+        result = await graph.ainvoke({"messages": [*history, ("user", text)]})
         answer = result["messages"][-1]
         assert answer.type == "ai" and isinstance(answer.content, str)
         assert answer.content.strip() and not answer.tool_calls
