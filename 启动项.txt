@@ -1,0 +1,5 @@
+cd C:\Users\DJW16\Desktop\PsycheGraph\langgraph-fullstack-python
+
+$env:PYTHONUTF8="1"
+
+uv run langgraph dev --no-browser
