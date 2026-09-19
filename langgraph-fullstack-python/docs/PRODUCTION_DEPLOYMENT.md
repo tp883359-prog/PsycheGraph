@@ -1,0 +1,416 @@
+# Production deployment (single VPS, Docker, Caddy)
+
+The runbook Phase 10B follows. It answers one question: **what exactly has to
+happen for `https://<domain>` to serve this demo, and what has been verified at
+each step?**
+
+Status of this document: written during Phase 10B from the tested artifacts.
+The steps marked ✅ were executed (on the development host for anything that does
+not need Docker); the steps marked 🚧 were **not** executed, because the machine
+that produced them has no Docker and no VPS was reachable. Nothing in this
+project was deployed anywhere as of writing this file.
+
+The current target has **no domain yet**, so stage 9a (public IP, plain HTTP) is
+the mode that will be verified first; stage 9b (domain, automatic HTTPS) is the
+follow-up on the same host.
+
+| Step | Verified |
+|---|---|
+| `scripts/prepare_docker.py` (+ `--check`) | ✅ |
+| docker-compose shape: loopback API port, no Postgres port | ✅ (generated + re-parsed) |
+| `scripts/smoke_local.py` against `langgraph dev` | ✅ (13/13, direct and through a proxy) |
+| Secure/Httponly/SameSite cookie logic | ✅ (unit tests + live through Caddy) |
+| Caddyfile syntax | ✅ (`caddy validate`, Caddy v2.11.4) |
+| Proxy behaviour: allowlist 404s, security headers, SSE flush, HTTPS cookie | ✅ locally (`deploy/Caddyfile.localhost.example`, step 11b) |
+| `docker build` (official image) | ✅ 2.92 GB, 5.4 min (needs the proxy workaround below) |
+| `docker compose up`: Postgres + Redis health | ✅ both healthy (real healthchecks) |
+| `langgraph-api` starts | ❌ blocked by the licence check (step 6) |
+| dev-runtime container (option B) | ✅ image 2.36 GB, `/health` ok, `vectorstore_available: true` |
+| DNS, ACME certificate, firewall | 🚧 (no public host) |
+| Prewarm / restart / backup against a container | 🚧 in progress on this host |
+
+## 0. Publish the revision you intend to deploy
+
+```bash
+# on the development machine
+git status                        # must be clean
+git add <files> && git commit -m "Phase 10A/10B: production hardening"
+git tag v0.9.0-local-production-ready
+git push origin main --tags
+```
+
+The server deploys a **commit or tag**, never an uncommitted working tree
+(`git status` on the server must be clean before `docker compose build`).
+
+## 1. Server prerequisites
+
+Ubuntu 24.04 LTS, 4 vCPU, 8 GB RAM, 50 GB SSD, CPU only (see
+`docs/DEPLOYMENT_BENCHMARK.md` for why 4 GB is the floor). Check first:
+
+```bash
+uname -a
+cat /etc/os-release
+nproc && free -h && df -h /
+```
+
+## 2. Docker Engine + Compose plugin (official repository)
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker "$USER"     # log out and back in
+docker --version && docker compose version
+```
+
+Do not use third-party install scripts.
+
+## 3. Clone and check out
+
+```bash
+sudo apt-get install -y git
+git clone https://github.com/tp883359-prog/PsycheGraph.git
+cd PsycheGraph/langgraph-fullstack-python
+git checkout v0.9.0-local-production-ready
+git status          # must be clean
+```
+
+## 4. Production secrets
+
+```bash
+cp .env.example .env
+chmod 600 .env
+python3 - <<'PY'
+import secrets, pathlib
+p = pathlib.Path(".env")
+token = secrets.token_urlsafe(48)
+text = p.read_text().replace("LANGGRAPH_DEMO_API_TOKEN=", f"LANGGRAPH_DEMO_API_TOKEN={token}", 1)
+p.write_text(text)
+print("token written to .env (not printed here)")
+PY
+```
+
+Then edit `.env` and set at least:
+
+| Variable | Value |
+|---|---|
+| `DEEPSEEK_API_KEY` | provider key |
+| `DEEPSEEK_MODEL` | `deepseek-flash` |
+| `LANGGRAPH_DEMO_API_TOKEN` | the generated random token |
+| `RAG_VECTORSTORE_PATH` | `data/vectorstore` (the compose bind mount expects it) |
+| `HF_HOME` | `/cache/huggingface` (inside the container) |
+| `WEB_RATE_LIMIT_PER_MINUTE` / `_HOUR` | demo cost ceiling, e.g. 6 / 40 |
+| `WEB_MAX_ACTIVE_RUNS_PER_SESSION` | `1` |
+| `WEB_REPLICAS` | `1` |
+| `WEB_COOKIE_SECURE` | leave `auto` (Caddy forwards `X-Forwarded-Proto: https`) |
+| `LOG_LEVEL` | `INFO` |
+
+Never commit, print or log this file. `chmod 600` and a `.env` that only the
+deploy user can read are the whole secret story for a single-VPS demo.
+
+## 5. Generate the artifacts and build
+
+```bash
+uv run python scripts/prepare_docker.py     # or: python3 scripts/prepare_docker.py
+docker build -f docker/Dockerfile -t psychegraph:local .
+docker images psychegraph:local             # record the size
+```
+
+The Dockerfile is generated by the official LangGraph CLI plus three documented
+patches (see the file header). Do not hand-edit it; change
+`scripts/prepare_docker.py` and regenerate, so `--check` keeps working in CI.
+
+## 6. Start the stack
+
+> **License requirement (found the hard way).** The official
+> `langchain/langgraph-api` image runs with
+> `LANGSMITH_LANGGRAPH_API_VARIANT=licensed` and
+> `LANGGRAPH_RUNTIME_EDITION=postgres`, and its Postgres runtime refuses to start
+> without a licence:
+>
+> ```
+> ValueError: License verification failed. Please ensure proper configuration:
+> - For local development, set a valid LANGSMITH_API_KEY for an account with
+>   LangGraph Cloud access ...
+> - For production, configure the LANGGRAPH_CLOUD_LICENSE_KEY environment
+>   variable with your LangGraph Cloud license key.
+> ```
+>
+> `langgraph dev` is unaffected (it uses the free `local_dev` in-memory runtime),
+> which is why the whole project ran fine before Docker. The image ships **no**
+> in-memory runtime (`langgraph_runtime_inmem` is absent), so there is no
+> licence-free variation of this container: either put a `LANGSMITH_API_KEY`
+> (or `LANGGRAPH_CLOUD_LICENSE_KEY`) in `.env` - never in the image or the
+> compose file - or accept that container deployment needs that credential.
+> Verify with `docker compose logs langgraph-api | tail -20` after step 6.
+
+### Option B - dev-runtime container (no licence)
+
+When no licence is available (or the budget does not allow one), the same
+application can run in a container on the free runtime that `langgraph dev`
+uses:
+
+```bash
+docker build -f docker/Dockerfile.dev -t psychegraph:dev .
+docker compose -f deploy/docker-compose.dev.yml --env-file .env up -d
+curl http://127.0.0.1:8123/health
+```
+
+What is identical: application code, `langgraph.json` (graph + custom HTTP app
++ auth), the vendored front end, RAG (BGE-M3 + Chroma), server-side limits,
+shared-token auth, the whole HTTP surface and the SSE contract.
+
+What is different - stated plainly, because it decides whether this is
+acceptable:
+
+* **all state is in process memory**: conversations and checkpoints vanish on
+  restart, and PostgreSQL/Redis are not used at all;
+* it is a **development server**, not a supported production runtime;
+* therefore it must not be presented as a production deployment - say "demo
+  instance" and mean it.
+
+The compose file is `deploy/docker-compose.dev.yml`; the reasoning and the
+trade-offs are also in the header of `docker/Dockerfile.dev`.
+
+```bash
+docker compose -f docker/docker-compose.yml --env-file .env up -d
+docker compose -f docker/docker-compose.yml ps
+```
+
+Expected: `langgraph-redis` healthy, `langgraph-postgres` healthy,
+`langgraph-api` healthy. The API is published on **127.0.0.1:8123 only**; from
+the host:
+
+```bash
+curl -s http://127.0.0.1:8123/health
+```
+
+`"status":"ok"` needs the vector store; `"embedding_loaded":false` is normal
+until the first retrieval (the model loads lazily on purpose).
+
+## 7. Vector store
+
+Index on the host, never in the container:
+
+```bash
+uv run python scripts/index_knowledge.py --rebuild   # writes data/vectorstore
+curl -s http://127.0.0.1:8123/health                 # "vectorstore_available": true
+```
+
+The compose file bind-mounts `./data/vectorstore`, so re-indexing is a host
+operation followed by `docker compose restart langgraph-api` if the API had
+opened the old files.
+
+The shipped corpus is a **project-authored test fixture**; the UI and the
+evidence cards must keep saying so. Do not relabel it as a Freud/Klein/Lacan
+source library.
+
+## 8. Prewarm BGE-M3 (once)
+
+```bash
+# Use the system python inside the container, NOT `uv run`: the image installs
+# dependencies into the system interpreter, while `uv run` would create a fresh
+# project venv from uv.lock (and on Linux that resolves to the CUDA torch wheel).
+docker compose -f docker/docker-compose.yml exec langgraph-api \
+  python scripts/prewarm_rag.py
+```
+
+Record the load time, `embedding dims: 1024`, the probe result and whether the
+weights were downloaded or came from the `psychegraph-hf` volume. After a
+container restart the same command must finish without downloading ~2.2 GB.
+
+## 9. Reverse proxy (Caddy), then HTTPS
+
+**Current plan: no domain yet.** Stage 9a verifies the whole stack over the
+public IPv4; stage 9b switches to a domain later without touching anything
+else.
+
+### 9a. IP mode (plain HTTP, now)
+
+```bash
+sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | \
+  sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | \
+  sudo tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+sudo apt-get update && sudo apt-get install -y caddy
+
+# Mode B block from deploy/Caddyfile.example, address = the VPS public IPv4
+sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile   # then uncomment Mode B
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl reload caddy
+
+curl -sI http://<PUBLIC_IP>/ | head -1     # 302 -> /conversations/<id>
+```
+
+In HTTP mode the session cookie is deliberately **not** `Secure`
+(`WEB_COOKIE_SECURE=auto` adds it only for HTTPS), otherwise the browser would
+drop it and every visit would look like a new session.
+
+### 9b. Domain mode (automatic HTTPS, when a domain exists)
+
+1. `A` record for the domain → the VPS public IPv4 (add `AAAA` only if the host
+   actually has working IPv6 - a wrong AAAA breaks ACME).
+2. In `/etc/caddy/Caddyfile`, switch to the `{$PSYCHEGRAPH_DOMAIN}` block and
+   export `PSYCHEGRAPH_DOMAIN` (+ optional `ACME_EMAIL`).
+3. `sudo caddy validate … && sudo systemctl reload caddy`.
+4. Verify the certificate and the redirect:
+
+```bash
+curl -sI http://<domain>/  | head -1     # 301/308 -> https://<domain>/
+curl -sI https://<domain>/ | head -1     # 302 -> /conversations/<id>
+curl -si https://<domain>/ | grep -i 'set-cookie'   # must contain Secure
+```
+
+The proxy allows exactly the browser surface (`/`, `/new-thread`, `/health`,
+`/evaluation`, `/static/*`, `/conversations/*`) and answers 404 for everything
+else, including `/threads`, `/runs`, `/assistants`, `/store`, `/docs`,
+`/openapi.json`, `/mcp`, `/metrics`, `/internal/*`, `/deploy/*`, `/ui/*`.
+
+## 10. Firewall
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+sudo ufw status verbose
+```
+
+Postgres (5432) and Redis (6379) are not published by the compose file at all,
+and the API port is bound to loopback, so ufw is a second layer rather than the
+only one. `deploy/docker-compose.debug.yml` is the only way to make 5433
+reachable from the host - never on a public server.
+
+## 11. Smoke test and external checks
+
+```bash
+# from the VPS (inside the proxy path)
+uv run python scripts/smoke_local.py --url http://127.0.0.1:8123 \
+    --token "$LANGGRAPH_DEMO_API_TOKEN"
+
+# from the internet (IP mode now; the same checks apply once HTTPS is on)
+curl -sI http://<PUBLIC_IP>/                     # 302 -> /conversations/<id>
+curl -s  http://<PUBLIC_IP>/health
+curl -si http://<PUBLIC_IP>/threads | head -1    # 404
+curl -si http://<PUBLIC_IP>/docs    | head -1    # 404
+```
+
+Then walk the UI in a browser: send `我梦见水。`, watch the workflow panel fill
+in (including the critic step), the evidence panel appear, the answer render
+with citations, the stream close, the composer re-enable, reload the page and
+confirm the turn is still there, and open `/evaluation`.
+
+### 11b. Rehearsing the proxy layer locally (no Docker, no domain)
+
+The proxy behaviour can be verified before any container exists, on loopback
+only. `deploy/Caddyfile.localhost.example` runs the same allowlist, headers and
+SSE settings against `127.0.0.1:8123`:
+
+```bash
+.\tools\caddy.exe run --config deploy\Caddyfile.localhost.example   # Windows
+caddy run --config deploy/Caddyfile.localhost.example               # Linux
+
+curl -k -si https://localhost:8443/threads      | head -1   # 404 (blocked)
+curl -k -si https://localhost:8443/openapi.json | head -1   # 404 (blocked)
+curl -si  http://localhost:8080/health | head -1            # 301 -> https
+curl -k -si https://localhost:8443/ | grep -i set-cookie    # ... Secure
+
+uv run python scripts/smoke_local.py --url https://localhost:8443 \
+    --token "$LANGGRAPH_DEMO_API_TOKEN" --insecure --behind-proxy
+```
+
+The certificate is Caddy's internal CA (`tls internal`), which is why the smoke
+script needs `--insecure`; `--behind-proxy` switches the expectation for
+`/threads` from `401` (direct API) to `404` (hidden by the proxy). `bind
+127.0.0.1` keeps both listeners off the LAN.
+
+### Local rehearsal gotchas (Windows + Docker Desktop)
+
+Two environment problems show up on a workstation behind a corporate/VPN proxy,
+and neither is a problem in the project itself:
+
+1. **`docker build` fails with `dial tcp 127.0.0.1:443: connection refused`.**
+   Either the hosts file maps Docker domains to `127.0.0.1` (check
+   `C:\Windows\System32\drivers\etc\hosts` for `auth.docker.io`,
+   `registry-1.docker.io`, `hub.docker.com` - some blocking lists add them), or
+   the daemon has no usable proxy. Fix: remove those hosts entries (needs
+   administrator) or give the build the proxy explicitly:
+   `$env:HTTPS_PROXY='http://127.0.0.1:<port>'` before `docker build`.
+2. **WSL2 in NAT mode cannot reach a proxy listening on the host's
+   `127.0.0.1`** (WSL warns about exactly this). Point Docker Desktop at
+   `Settings -> Resources -> Proxies -> Manual` with
+   `http://host.docker.internal:<port>` for HTTP and HTTPS, exclude
+   `localhost,127.0.0.1`, and keep the proxy client's "allow LAN" disabled -
+   the VM reaches the host through its NAT gateway, not through loopback.
+
+## 12. Backup
+
+```bash
+chmod +x scripts/backup_demo.sh
+./scripts/backup_demo.sh                 # backups/postgres-<stamp>.sql.gz + vectorstore-<stamp>.tar.gz
+```
+
+Copy the archives off the VPS. Postgres holds the conversations, the vector
+store holds the index; the Hugging Face volume is cache and is not backed up,
+and `.env` is never included in an archive.
+
+## 13. Upgrade
+
+```bash
+cd PsycheGraph/langgraph-fullstack-python
+git fetch --tags
+git checkout <new-tag>
+git status                                          # clean
+# review .env.example for new variables
+docker compose -f docker/docker-compose.yml --env-file .env build
+docker compose -f docker/docker-compose.yml --env-file .env up -d
+curl -s http://127.0.0.1:8123/health
+uv run python scripts/smoke_local.py --url http://127.0.0.1:8123 --token "$LANGGRAPH_DEMO_API_TOKEN"
+```
+
+Never edit Python files on the server: the image would drift from git and the
+rollback below would not be reproducible.
+
+## 14. Rollback
+
+```bash
+git checkout v0.9.0-local-production-ready   # previous known-good tag
+docker compose -f docker/docker-compose.yml --env-file .env build
+docker compose -f docker/docker-compose.yml --env-file .env up -d
+```
+
+Database migrations: **this project has none**. LangGraph's checkpoint tables
+are created and managed by the runtime itself, and no schema change ships with
+the application, so a rollback does not need a down-migration. That is a
+property to re-check whenever the runtime or `langgraph-api` version changes -
+a major upgrade of the base image may alter the checkpoint schema, and then the
+safe order is: back up first (step 12), deploy, and keep the previous Postgres
+volume until the new version has answered a real request.
+
+## 15. Troubleshooting
+
+| Symptom | Likely cause | Check |
+|---|---|---|
+| `langgraph-api` never becomes healthy | BGE-M3 download or a missing `.env` variable | `docker compose logs langgraph-api` |
+| `langgraph-api` restarts with `License verification failed` | official image needs `LANGSMITH_API_KEY` / `LANGGRAPH_CLOUD_LICENSE_KEY` | see the box in step 6 |
+| `docker build` cannot reach Docker Hub | proxy/hosts-file problem on the build host | see "Local rehearsal gotchas" in step 11b |
+| `/health` says `degraded` | vector store not mounted or not built | `docker compose exec langgraph-api ls /data/vectorstore` |
+| First answer takes ~25 s longer | lazy model load (expected once) | run `scripts/prewarm_rag.py` |
+| Browser loops back to a new conversation | proxy strips cookies (`X-Forwarded-Proto` missing) | `curl -si https://<domain>/ \| grep -i set-cookie` |
+| Cookie never reaches the browser over HTTPS | `Secure` set but the page was opened over HTTP, or the proxy does not forward `X-Forwarded-Proto` | check `set-cookie` in the response, and `WEB_COOKIE_SECURE` in `.env` |
+| SSE arrives all at once at the end | proxy buffering | `flush_interval -1` in the Caddyfile, `X-Accel-Buffering: no` from the app |
+| `404` for `/threads` on purpose | that is the design | never add it to the proxy allowlist |
+| Answer fails with a model error | provider outage or quota | UI shows a safe sentence; server log has the class, never the key |
+| Certificate not issued | DNS not propagated, IPv6 AAAA wrong, port 80 blocked | `sudo journalctl -u caddy -n 50` |

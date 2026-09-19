@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-16T04:26:57+00:00",
+  "source": "data/evals/full/report_rescored.json",
+  "rescored": true,
+  "dataset_cases": 60,
+  "run_id": "full-rescored",
+  "runs_total": 240.0,
+  "runs_failed": 0.0,
+  "variants": [
+    {
+      "key": "single_agent",
+      "label": "Single Agent",
+      "runs": 60,
+      "metrics": {
+        "avg_llm_calls": 1.0,
+        "avg_latency_seconds": 12.3281,
+        "avg_total_tokens": 3244.0833,
+        "theory_differentiation_judge": 3.9231,
+        "observation_fidelity_judge": 4.85,
+        "overinterpretation_control_judge": 4.9667,
+        "clinical_boundary_judge": 5.0,
+        "citation_id_validity": null,
+        "citation_support_judge": null,
+        "diagnosis_refusal_rate": 1.0,
+        "critic_pass_rate": null,
+        "revision_rate": null,
+        "safe_fallback_rate": null
+      }
+    },
+    {
+      "key": "multi_agent",
+      "label": "Multi Agent",
+      "runs": 60,
+      "metrics": {
+        "avg_llm_calls": 5.0333,
+        "avg_latency_seconds": 57.5277,
+        "avg_total_tokens": 19752.5833,
+        "theory_differentiation_judge": 4.5581,
+        "observation_fidelity_judge": 4.8167,
+        "overinterpretation_control_judge": 4.95,
+        "clinical_boundary_judge": 5.0,
+        "citation_id_validity": null,
+        "citation_support_judge": null,
+        "diagnosis_refusal_rate": 1.0,
+        "critic_pass_rate": null,
+        "revision_rate": null,
+        "safe_fallback_rate": null
+      }
+    },
+    {
+      "key": "multi_agent_rag",
+      "label": "Multi Agent + RAG",
+      "runs": 60,
+      "metrics": {
+        "avg_llm_calls": 5.1,
+        "avg_latency_seconds": 57.5233,
+        "avg_total_tokens": 23137.95,
+        "theory_differentiation_judge": 4.8158,
+        "observation_fidelity_judge": 4.9333,
+        "overinterpretation_control_judge": 4.9833,
+        "clinical_boundary_judge": 4.9231,
+        "citation_id_validity": 1.0,
+        "citation_support_judge": 4.4655,
+        "diagnosis_refusal_rate": 1.0,
+        "critic_pass_rate": null,
+        "revision_rate": null,
+        "safe_fallback_rate": null
+      }
+    },
+    {
+      "key": "full_system",
+      "label": "Full System (Critic)",
+      "runs": 60,
+      "metrics": {
+        "avg_llm_calls": 6.2333,
+        "avg_latency_seconds": 66.9861,
+        "avg_total_tokens": 33692.3,
+        "theory_differentiation_judge": 4.775,
+        "observation_fidelity_judge": 4.9,
+        "overinterpretation_control_judge": 4.9833,
+        "clinical_boundary_judge": 4.9167,
+        "citation_id_validity": 1.0,
+        "citation_support_judge": 4.4068,
+        "diagnosis_refusal_rate": 1.0,
+        "critic_pass_rate": 1.0,
+        "revision_rate": 0.0667,
+        "safe_fallback_rate": 0.0
+      }
+    }
+  ],
+  "notes": [
+    "聚合指标，来自 Phase 8 的完整评测运行（60 条用例 × 4 个变体）。",
+    "RAG 相关指标使用项目自编测试语料（TEST FIXTURE）。",
+    "N/A 表示该指标对该变体不适用，并不等于 0。"
+  ]
+}

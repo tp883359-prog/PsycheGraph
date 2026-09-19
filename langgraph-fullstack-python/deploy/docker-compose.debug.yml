@@ -1,0 +1,16 @@
+# Debug-only compose override. NEVER use this on a public server.
+#
+# The production compose file deliberately does not publish Postgres (see
+# docs/SECURITY_DEPLOYMENT.md, section 4). For local debugging you can add the
+# host mapping back - still bound to loopback, so it never leaves the machine:
+#
+#   docker compose -f docker/docker-compose.yml \
+#       -f deploy/docker-compose.debug.yml --env-file .env up -d
+#   psql "postgres://postgres:postgres@127.0.0.1:5433/postgres?sslmode=disable"
+#
+# The data volume is shared with the production compose file, so this is the
+# same database, not a copy.
+services:
+  langgraph-postgres:
+    ports:
+      - "127.0.0.1:5433:5432"

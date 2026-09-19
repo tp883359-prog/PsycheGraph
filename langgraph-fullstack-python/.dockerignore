@@ -1,0 +1,58 @@
+# Build context exclusions. Keep this in sync with scripts/prepare_docker.py.
+#
+# Secrets: never baked into an image layer.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Version control and editor state.
+.git
+.github
+.vscode
+.idea
+*.code-workspace
+
+# Virtual environment and byte-code caches.
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+.coverage.*
+coverage.xml
+
+# Local runtime state that must not leak into the image.
+.langgraph_api
+data/evals
+data/runs
+data/*.log
+data/reports
+data/stream_inspect.jsonl
+logs
+tmp
+
+# Model weights and the local index: they are gigabytes, they are deployment
+# state, and they belong in volumes (see docs/SECURITY_DEPLOYMENT.md).
+.cache
+data/vectorstore
+data/vectorstore_*
+data/chroma
+*.safetensors
+
+# Documentation and evaluation output that the server never reads.
+docs/*.png
+docs/*.pdf
+*.zip
+*.tar
+*.tar.gz
+
+# OS noise.
+.DS_Store
+Thumbs.db

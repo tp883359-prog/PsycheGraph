@@ -1,0 +1,146 @@
+# PsycheGraph - Caddy reverse proxy for a single-VPS portfolio demo.
+#
+# Two operating modes. Pick ONE site block; the rest of the file is identical.
+#
+#   Mode A - domain available (automatic HTTPS, the end state)
+#       export PSYCHEGRAPH_DOMAIN=psychegraph.example.com
+#       export ACME_EMAIL=you@example.com
+#       -> use the `{$PSYCHEGRAPH_DOMAIN}` block below
+#
+#   Mode B - no domain yet (current decision: verify over the public IP first)
+#       -> comment out the domain block, uncomment the `http://<PUBLIC_IP>`
+#          block at the bottom of this file
+#       -> plain HTTP on port 80; the session cookie stays non-Secure because
+#          the app's `WEB_COOKIE_SECURE=auto` only adds the flag for HTTPS
+#       -> when the domain exists, switch to Mode A and reload; no other
+#          change is required, and Caddy then redirects HTTP to HTTPS
+#
+# Install (Ubuntu, official repository):
+#   https://caddyserver.com/docs/install#debian-ubuntu-raspbian
+# Then copy this file to /etc/caddy/Caddyfile (or include it) and reload:
+#   sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+#   sudo systemctl reload caddy
+#
+# The Agent API container is published on 127.0.0.1:8123 only, so this proxy is
+# the single process that faces the internet. Of the 67 routes the LangGraph
+# server documents in /openapi.json, the browser demo needs exactly six path
+# families: /, /new-thread, /health, /evaluation, /static/*, /conversations/*.
+# Everything else - /threads, /runs, /assistants, /store, /docs, /openapi.json,
+# /mcp, /metrics, /internal/*, /deploy/*, /ui/*, /a2a/* - is answered with 404.
+
+{$PSYCHEGRAPH_DOMAIN} {
+	encode zstd gzip
+
+	# ACME certificate. Caddy obtains and renews it automatically; set the
+	# address for expiry notices, or drop this block entirely for Let's
+	# Encrypt's defaults. HTTP (port 80) is redirected to HTTPS automatically
+	# once a hostname is configured.
+	tls {$ACME_EMAIL}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+		# The app ships inline <script> and <style>, so 'unsafe-inline' is
+		# required; everything else is limited to this origin, which is what
+		# makes the policy useful (no CDN, no third party, no framing).
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	}
+
+	# Auditability: spell out what is internal even though the fallback below
+	# would already hide it.
+	@internal path /threads* /runs* /assistants* /store* /mcp* /docs* /redoc* /openapi.json /info /ok /metrics /internal* /deploy* /ui* /a2a* /.well-known/*
+	handle @internal {
+		respond "Not Found" 404
+	}
+
+	@web path / /new-thread /health /evaluation /static/* /conversations/*
+	handle @web {
+		reverse_proxy 127.0.0.1:8123 {
+			# SSE: -1 disables response buffering, which is what keeps the
+			# workflow events flowing instead of arriving in one burst at the
+			# end of the run. A full answer takes 40-80 s, so the proxy must
+			# not apply a short read timeout either.
+			flush_interval -1
+			transport http {
+				read_timeout 300s
+				write_timeout 300s
+			}
+		}
+	}
+
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+# ---------------------------------------------------------------------------
+# Mode B - no domain yet: verify the deployment over the public IP first
+# ---------------------------------------------------------------------------
+# Uncomment this block (and comment out the domain block above), replace the
+# address with the VPS public IPv4, then validate and reload:
+#
+#   sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+#   sudo systemctl reload caddy
+#
+# `http://` disables TLS for this site on purpose: Caddy cannot obtain a
+# public certificate for a bare IP address. Everything else - the allowlist,
+# the security headers, the SSE settings - is identical to Mode A, so switching
+# to a domain later is a one-block change.
+#
+# http://203.0.113.10 {
+# 	encode zstd gzip
+#
+# 	header {
+# 		X-Content-Type-Options nosniff
+# 		Referrer-Policy strict-origin-when-cross-origin
+# 		X-Frame-Options DENY
+# 		-Server
+# 		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+# 	}
+#
+# 	@internal path /threads* /runs* /assistants* /store* /mcp* /docs* /redoc* /openapi.json /info /ok /metrics /internal* /deploy* /ui* /a2a* /.well-known/*
+# 	handle @internal {
+# 		respond "Not Found" 404
+# 	}
+#
+# 	@web path / /new-thread /health /evaluation /static/* /conversations/*
+# 	handle @web {
+# 		reverse_proxy 127.0.0.1:8123 {
+# 			flush_interval -1
+# 			transport http {
+# 				read_timeout 300s
+# 				write_timeout 300s
+# 			}
+# 		}
+# 	}
+#
+# 	handle {
+# 		respond "Not Found" 404
+# 	}
+# }
+#
+# Self-signed HTTPS on the IP (optional, browser will warn): replace the first
+# line with `https://203.0.113.10 {` and add `tls internal` right below it.
+# With `tls internal`, `X-Forwarded-Proto: https` makes the app mark the
+# session cookie `Secure`, which is the same behaviour the real domain will get.
+
+# ---------------------------------------------------------------------------
+# Abuse protection: read this before opening the demo to the internet
+# ---------------------------------------------------------------------------
+# Caddy's standard build has no rate-limit directive. Third-party modules
+# (caddy-ratelimit) need a custom binary built with xcaddy, and the security
+# guide for this project says not to run unverified binaries, so the deployment
+# relies on the application's own limits instead:
+#
+#   * WEB_MAX_INPUT_CHARS              - input size, server-side
+#   * WEB_RATE_LIMIT_PER_MINUTE/HOUR   - rolling window per browser session
+#   * WEB_MAX_ACTIVE_RUNS_PER_SESSION  - one run per session at a time
+#
+# Known bypass: the session identity lives in a cookie, so a visitor who
+# deletes it gets a fresh rate-limit bucket. That is acceptable for a portfolio
+# demo with a published cost ceiling and is documented in
+# docs/SECURITY_DEPLOYMENT.md. If stronger protection is needed later, either
+# switch this host to Nginx (standard `limit_req`, but do not run two proxies)
+# or put a managed DDoS/WAF layer in front and keep this proxy as the origin.

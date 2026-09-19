@@ -1,0 +1,69 @@
+# Development-runtime container for the PsycheGraph demo.
+#
+# WHY THIS EXISTS
+# The official `langchain/langgraph-api` image (built by docker/Dockerfile)
+# refuses to start without a LangGraph Platform licence or a LangSmith API key
+# for an account with LangGraph Cloud access:
+#
+#   ValueError: License verification failed ...
+#
+# That image also ships no in-memory runtime, so there is no licence-free
+# variation of it. This image runs the *same free runtime* that `langgraph dev`
+# uses, which lets the application be containerised without a licence.
+#
+# WHAT IS IDENTICAL
+# Application code, langgraph.json (graph + custom HTTP app + auth), the
+# vendored front end, RAG (BGE-M3 + Chroma), the server-side limits and the
+# shared-token auth all behave exactly as on a developer machine.
+#
+# WHAT IS DIFFERENT - do not hide this
+#   * all state is in process memory: conversations do not survive a restart,
+#     and PostgreSQL/Redis are not used at all (see deploy/docker-compose.dev.yml);
+#   * it is a development server; it is not supported for production traffic.
+# Use this for a demo or a rehearsal. For a real deployment, use the official
+# image with a licence: docs/PRODUCTION_DEPLOYMENT.md.
+
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HOME=/cache/huggingface \
+    HF_HUB_DISABLE_XET=1 \
+    RAG_VECTORSTORE_PATH=/data/vectorstore \
+    LANGGRAPH_RUNTIME_EDITION=inmem
+
+# libgomp1 is required by the CPU torch wheels; curl keeps the container
+# debuggable from the host without extra tooling.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgomp1 curl \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir "uv==0.12.14"
+
+WORKDIR /deps/langgraph-fullstack-python
+
+# The application dependencies come from the same lock file the official image
+# uses (exact tested versions). torch is installed first from the CPU wheel
+# index - PyPI's Linux wheel declares the nvidia-* CUDA packages as
+# dependencies, which a CPU deployment must not pull (~4 GB). The version comes
+# from the lock file, so the two images cannot drift apart.
+COPY docker/requirements.lock.txt /tmp/requirements.lock.txt
+RUN TORCH_VERSION="$(sed -n 's/^torch==\([^; ]*\).*/\1/p' /tmp/requirements.lock.txt | head -n1)" \
+ && test -n "$TORCH_VERSION" \
+ && uv pip install --system --index-url https://download.pytorch.org/whl/cpu "torch==${TORCH_VERSION}"
+RUN uv pip install --system -r /tmp/requirements.lock.txt \
+ && rm /tmp/requirements.lock.txt
+
+# The development server itself lives in a dev-only dependency group, so it is
+# pinned separately instead of being exported into the application lock file.
+RUN uv pip install --system "langgraph-cli[inmem]==0.4.31"
+
+COPY . /deps/langgraph-fullstack-python
+RUN uv pip install --system --no-deps -e /deps/langgraph-fullstack-python
+
+EXPOSE 8000
+
+# langgraph.json is relative to the working directory, exactly as in
+# development; only the bind address changes so the port can be published.
+CMD ["langgraph", "dev", "--host", "0.0.0.0", "--port", "8000", "--no-reload", "--no-browser"]

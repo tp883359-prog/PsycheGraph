@@ -20,11 +20,12 @@ dependencies = [
     "python-fasthtml>=0.12.1",
     "langgraph-sdk>=0.1.57",
     "langchain-deepseek>=1.1.0",
+    "langchain-chroma>=1.1.0",
+    "langchain-huggingface>=1.0.0",
+    "sentence-transformers>=5.0.0",
+    "pypdf>=6.0.0",
 ]
 
-
-[project.optional-dependencies]
-dev = ["mypy>=1.11.1", "ruff>=0.6.1"]
 
 [build-system]
 requires = ["setuptools>=73.0.0", "wheel"]
@@ -61,12 +62,24 @@ lint.ignore = [
 ]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D", "UP"]
+# Template UI file kept as-is from the LangGraph starter; not ours to reformat.
+"src/react_agent/app.py" = ["I001"]
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.mypy]
+# `python-fasthtml` ships no type stubs; `react_agent.web` is still checked in
+# strict mode, but its FastHTML imports are treated as untyped (everything the
+# web layer derives from them is annotated explicitly).
+[[tool.mypy.overrides]]
+module = ["fasthtml.*", "fastcore.*", "starlette.*", "langgraph_sdk.*"]
+ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
     "langgraph-api>=0.0.30",
     "langgraph-cli[inmem]>=0.1.83",
+    "mypy>=1.11.1",
     "pytest>=8.3.4",
+    "ruff>=0.6.1",
 ]

@@ -1,233 +1,263 @@
-# Full-Stack Python Chatbot with LangGraph
+# PsycheGraph
 
-[![CI](https://github.com/langchain-ai/langgraph-fullstack-python/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/langchain-ai/langgraph-fullstack-python/actions/workflows/unit-tests.yml)
-[![Integration Tests](https://github.com/langchain-ai/langgraph-fullstack-python/actions/workflows/integration-tests.yml/badge.svg)](https://github.com/langchain-ai/langgraph-fullstack-python/actions/workflows/integration-tests.yml)
-[![Open in - LangGraph Studio](https://img.shields.io/badge/Open_in-LangGraph_Studio-00324d.svg?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4NS4zMzMiIGhlaWdodD0iODUuMzMzIiB2ZXJzaW9uPSIxLjAiIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHBhdGggZD0iTTEzIDcuOGMtNi4zIDMuMS03LjEgNi4zLTYuOCAyNS43LjQgMjQuNi4zIDI0LjUgMjUuOSAyNC41QzU3LjUgNTggNTggNTcuNSA1OCAzMi4zIDU4IDcuMyA1Ni43IDYgMzIgNmMtMTIuOCAwLTE2LjEuMy0xOSAxLjhtMzcuNiAxNi42YzIuOCAyLjggMy40IDQuMiAzLjQgNy42cy0uNiA0LjgtMy40IDcuNkw0Ny4yIDQzSDE2LjhsLTMuNC0zLjRjLTQuOC00LjgtNC44LTEwLjQgMC0xNS4ybDMuNC0zLjRoMzAuNHoiLz48cGF0aCBkPSJNMTguOSAyNS42Yy0xLjEgMS4zLTEgMS43LjQgMi41LjkuNiAxLjcgMS44IDEuNyAyLjcgMCAxIC43IDIuOCAxLjYgNC4xIDEuNCAxLjkgMS40IDIuNS4zIDMuMi0xIC42LS42LjkgMS40LjkgMS41IDAgMi43LS41IDIuNy0xIDAtLjYgMS4xLS44IDIuNi0uNGwyLjYuNy0xLjgtMi45Yy01LjktOS4zLTkuNC0xMi4zLTExLjUtOS44TTM5IDI2YzAgMS4xLS45IDIuNS0yIDMuMi0yLjQgMS41LTIuNiAzLjQtLjUgNC4yLjguMyAyIDEuNyAyLjUgMy4xLjYgMS41IDEuNCAyLjMgMiAyIDEuNS0uOSAxLjItMy41LS40LTMuNS0yLjEgMC0yLjgtMi44LS44LTMuMyAxLjYtLjQgMS42LS41IDAtLjYtMS4xLS4xLTEuNS0uNi0xLjItMS42LjctMS43IDMuMy0yLjEgMy41LS41LjEuNS4yIDEuNi4zIDIuMiAwIC43LjkgMS40IDEuOSAxLjYgMi4xLjQgMi4zLTIuMy4yLTMuMi0uOC0uMy0yLTEuNy0yLjUtMy4xLTEuMS0zLTMtMy4zLTMtLjUiLz48L3N2Zz4=)](https://langgraph-studio.vercel.app/templates/open?githubUrl=https://github.com/langchain-ai/langgraph-fullstack-python)
+**Multi-agent psychoanalytic theory explorer** — a local-first exploration of a
+three-school psychoanalytic reading pipeline (Freudian / Object Relations /
+Lacanian) built on LangGraph, with a web UI that shows the agent graph working.
 
-This template demonstrates how to build a full-stack chatbot application using LangGraph's HTTP configuration capabilities. It showcases how to combine a React-style agent with a modern web UI, all hosted within a single LangGraph deployment.
+用于理论学习、文本解释与文学 / 叙事分析。**不用于临床诊断、心理治疗或医学建议。**
 
-## Key Features
+---
 
-- 🌐 **Single Deployment** - Host both your agent and UI in one LangGraph deployment
-- 🎨 **Modern UI** - Beautiful chat interface built with FastHTML
-- 🔄 **React-Style Agent** - Intelligent chatbot using LangGraph's React agent pattern
-- 🛠️ **Easy Configuration** - Simple HTTP routing setup through `langgraph.json`
-- ⚡ **Fast Development** - Rapid prototyping with FastHTML's server-side components
+## What it is
 
-## How It Works
+PsycheGraph turns one piece of material (a dream, a narrative, a literary text,
+a relationship fragment) into a multi-perspective theoretical reading:
 
-### HTTP Configuration
+- a **Supervisor** plans the turn and decides whether the user asked for a
+  clinical judgement;
+- an **Evidence** node retrieves passages from a **local** Chroma index
+  (BGE-M3 embeddings, no cloud service, built offline);
+- three **specialists run concurrently** — Freudian, Object Relations, Lacanian —
+  each with its own prompt, its own shelf of material and structured output;
+- a **Synthesizer** merges the three readings and cites the retrieved passages;
+- a **deterministic validator** (pure code) and a **Critic** (model) review the
+  draft for observation fidelity, evidence support, theory consistency and
+  clinical safety;
+- at most **one revision** is allowed; if the draft still fails, a conservative
+  **safe fallback** is published instead of unsupported text.
 
-The magic happens in `langgraph.json`, where we configure both the agent and HTTP routes:
+The web layer is a custom FastHTML app served next to the agent API: it streams
+the *workflow* (node states) while the run happens, then shows the finished
+answer with clickable citations and the evidence panel behind it.
 
-```json
-{
-  "dependencies": ["."],
-  "graphs": {
-    "agent": "./src/react_agent/graph.py:graph"
-  },
-  "http": {
-    "app": "./src/react_agent/app.py:app"
-  }
-}
+## Architecture
+
+```mermaid
+flowchart TD
+    START --> supervisor[Supervisor<br/>plan]
+    supervisor --> evidence[Evidence<br/>local Chroma retrieval]
+    evidence --> freudian[Freudian]
+    evidence --> object_relations[Object Relations]
+    evidence --> lacanian[Lacanian]
+    freudian --> synthesizer[Synthesizer]
+    object_relations --> synthesizer
+    lacanian --> synthesizer
+    synthesizer --> validator[Deterministic validator<br/>code only]
+    validator --> critic[Critic]
+    critic -->|pass| finalize[Finalize]
+    critic -->|revise, budget left| revise[Revise synthesis]
+    revise --> validator
+    critic -->|revise, budget spent| safe[Safe finalize]
+    finalize --> END
+    safe --> END
 ```
 
-This configuration:
-1. Defines the agent graph in `graph.py`
-2. Sets up HTTP routes through FastHTML in `app.py`
+Normal turn: **6 model calls** (Supervisor, 3 specialists, Synthesizer, Critic).
+One revision: **8 calls**. The evidence node, the validator and both finalizers
+never call a model.
 
-### FastHTML UI
+```mermaid
+flowchart LR
+    browser[Browser] -- "POST send-message" --> web[FastHTML app]
+    web -- "queue message" --> reg[(in-process registry)]
+    browser -- "GET …/stream (SSE)" --> web
+    web -- "runs.stream(tasks, updates)" --> api[LangGraph API]
+    api --> graph[Agent graph]
+    graph -- "task / update events" --> web
+    web -- "sanitized workflow / answer / sources / error / close" --> browser
+```
 
-The UI is built using FastHTML, a lightweight server-side component framework. Key features:
+## Technology stack
 
-- Modern chat interface using DaisyUI components
-- Real-time message updates
-- Clean, responsive design
+| Layer | Choice |
+|---|---|
+| Orchestration | LangGraph 1.x `StateGraph`, `langgraph dev` server |
+| Models | DeepSeek (`langchain-deepseek`), structured output via function calling |
+| Retrieval | `langchain-chroma` + `sentence-transformers` (BAAI/bge-m3, CPU) |
+| Web | FastHTML (server-rendered), HTMX 2 + `htmx-ext-sse`, one small JS file |
+| Tooling | `uv`, `ruff`, `mypy --strict`, `pytest` |
 
-### LangGraph Agent
-
-The chatbot uses LangGraph's React agent pattern, which:
-
-- Processes messages through a Claude 3 model
-- Maintains conversation state
-- Can be easily extended with custom tools
-
-## Getting Started
-
-Install the dependencies:
+## Quick start
 
 ```bash
 pip install uv
-uv sync --dev 
+uv sync
+
+# 1. configure the model provider (see .env.example)
+#    DEEPSEEK_API_KEY=sk-...
+#    DEEPSEEK_MODEL=deepseek-flash
+
+# 2. (optional, RAG) put your own material into knowledge/<school>/ and index it
+uv run python scripts/index_knowledge.py --rebuild
+
+# 3. run the app + API on one port
+uv run langgraph dev --no-reload
 ```
 
-Then run the local server:
+Then open <http://127.0.0.1:2024>.
+
+Retrieval runs off the event loop (`asyncio.to_thread`), so the dev server no
+longer needs `--allow-blocking`. Without an index the graph still runs - every
+reading then states that it has no local literature behind it instead of
+inventing sources.
+
+## The web UI
+
+Three areas, one page:
+
+- **left** – conversations (titles come from the first user message; no extra
+  model call);
+- **middle** – chat: your message, then the final answer with theory tags, a
+  quality line and clickable citation labels;
+- **right** – *Agent Workflow* (every node with a text status, a short message
+  and its real duration) and *Theory Evidence* (retrieved passages grouped by
+  school, with metadata read from the index only).
+
+The run streams over SSE as named events (`workflow`, `sources`, `answer`,
+`error`, `close`). There is **no fake token streaming**: with structured output
+the visible answer only exists after the finalizer runs, so the UI shows
+progress instead of pretending to type. During a run the composer is disabled;
+when the stream closes it is restored. A failed run shows one short sentence and
+never a traceback.
+
+**System / Evaluation** (`/evaluation`) renders the Phase 8 ablation results
+from `docs/evaluation_summary.json`, a small aggregate-only artifact produced by
+`scripts/export_evaluation_summary.py`. The page never calls a model and never
+re-runs the evaluation.
+
+## Evaluation results (Phase 8, 60 cases × 4 variants)
+
+| Variant | LLM calls | Latency | Tokens | Theory differentiation | Citation validity | Clinical boundary |
+|---|---|---|---|---|---|---|
+| Single Agent | 1.00 | 12.3 s | 3,244 | 3.92 | N/A | 5.00 |
+| Multi Agent | 5.03 | 57.5 s | 19,753 | 4.27 | N/A | 5.00 |
+| Multi Agent + RAG | 5.10 | 57.5 s | 23,138 | 4.45 | 1.00 | 4.92 |
+| Full System (Critic) | 6.23 | 67.0 s | 33,692 | 4.42 | 1.00 | 4.92 |
+
+N/A means the metric does not apply to that variant; it is never counted as 0.
+The clinical refusal rate is 1.00 for all four variants. RAG metrics come from a
+project-authored **test corpus** (`TEST FIXTURE`); full tables, method and
+caveats are in `docs/EVALUATION.md`.
+
+These numbers describe **engineering behaviour** — grounding, citation
+integrity, theory differentiation, safety boundaries, latency — not the validity
+of psychoanalytic theory or of any clinical treatment.
+
+## Agent workflow
+
+| Phase | Node | Model call |
+|---|---|---|
+| Plan | `supervisor` | yes |
+| Evidence | `evidence` | no (local index) |
+| Theory (parallel) | `freudian`, `object_relations`, `lacanian` | 3 |
+| Synthesis | `synthesizer` | yes |
+| Review | `deterministic_validator` (code), `critic` | 1 |
+| Publish | `finalize` or `safe_finalize` | no |
+
+Layer-by-layer documentation:
+
+- `docs/使用说明.md` – how to run and demo it, and what to say (and not say)
+- `docs/技术说明.md` – the whole system on one page (graph, contracts, RAG, web, ops)
+- `docs/ARCHITECTURE.md` – project-wide architecture and change plan
+- `docs/MODEL_PROVIDER.md` – DeepSeek provider layer
+- `docs/STRUCTURED_OUTPUT.md` – schemas and state contract
+- `docs/MULTI_AGENT_ARCHITECTURE.md` – supervisor, specialists, synthesis
+- `docs/RAG_ARCHITECTURE.md` – local knowledge base and evidence contract
+- `docs/CRITIC_ARCHITECTURE.md` – validator, critic, bounded revision
+- `docs/EVALUATION.md` – evaluation framework and ablation study
+- `docs/WEB_ARCHITECTURE.md` – SSE contract, workflow UI, evidence, citations
+- `docs/SECURITY_DEPLOYMENT.md` – exposure, ownership, limits, Docker artifacts
+- `docs/PRODUCTION_DEPLOYMENT.md` – the single-VPS runbook (Docker, Caddy, HTTPS)
+- `docs/DEPLOYMENT_BENCHMARK.md` – memory/latency measurements and sizing
+- `docs/DEPLOYMENT_OPTIONS.md` – managed platform vs own VPS
+- `deploy/Caddyfile.example` – reverse proxy with the public route allowlist
+
+## Screenshots
+
+_Placeholder — to be added in a later phase:_
+
+- desktop: chat with the workflow and evidence panels next to it;
+- narrow window: the workflow/evidence drawer and the collapsed sidebar;
+- `/evaluation`: the four-variant comparison table with its disclaimer.
+
+## Limitations
+
+- Retrieval is intentionally local and small; the shipped demo index is a
+  **project-authored test corpus**, not a Freud / Klein / Lacan source library.
+- The first retrieval in a fresh process costs ~12 s (BGE-M3 loads lazily) and
+  peaks at ~2 GB RSS; `scripts/prewarm_rag.py` moves that cost off the first
+  request. Numbers and method: `docs/DEPLOYMENT_BENCHMARK.md`.
+- The workflow panel mirrors the **current** run. After a reload the
+  conversation, the newest answer and its citations come back from the
+  checkpoint, but the step log does not.
+- One run per browser session at a time, enforced server-side (429 notice);
+  there is no cancel button yet.
+- A failed run can be resent by hand; automatic replay is deliberately not
+  implemented, because a retry must not duplicate a turn in the checkpoint.
+- Authentication is a shared bearer token plus a per-browser session cookie, not
+  a user account system. Read `docs/SECURITY_DEPLOYMENT.md` before exposing the
+  port to anyone else.
+
+## Container run (two options)
+
+The container artifacts come from the official LangGraph CLI and are checked in;
+regenerating and verifying them needs no Docker:
+
 ```bash
-uv run langgraph dev --no-browser
+uv run python scripts/prepare_docker.py          # Dockerfile + compose + lock
+uv run python scripts/prepare_docker.py --check  # used by the test/CI gate
+uv run python scripts/prewarm_rag.py             # load BGE-M3 once
+uv run python scripts/bench_rss.py --skip-run    # memory / latency ladder
 ```
 
-Visit `http://localhost:2024` to interact with your chatbot!
+**Option A - the official runtime** (needs a LangGraph Platform licence or a
+LangSmith API key with LangGraph Cloud access; the image refuses to start
+without one, see `docs/PRODUCTION_DEPLOYMENT.md` step 6):
 
-## Customization
+```bash
+docker build -f docker/Dockerfile -t psychegraph:local .   # measured: 2.92 GB, 5.4 min
+docker compose -f docker/docker-compose.yml --env-file .env up -d
+curl http://localhost:8123/health
+```
 
-### Modify the Agent
+**Option B - demo-grade, no licence** (the free runtime `langgraph dev` uses):
 
-Edit `src/react_agent/graph.py` to:
-- Change the system prompt
-- Add custom tools
-- Modify the agent's behavior
+```bash
+docker build -f docker/Dockerfile.dev -t psychegraph:dev .  # measured: 2.36 GB, 3.5 min
+docker compose -f deploy/docker-compose.dev.yml --env-file .env up -d
+curl http://localhost:8123/health
+```
 
-### Customize the UI
+Option B keeps everything that matters for the demo - same app, auth, limits,
+RAG, web UI, SSE - but **threads and checkpoints live in process memory**, so
+they disappear on restart, and PostgreSQL/Redis are not used. It is a
+development server and must be described as a demo, not as production.
 
-Edit `src/react_agent/app.py` to:
-- Update the chat interface
-- Add new components
-- Modify styling
+Both options publish the API on `127.0.0.1` only; a reverse proxy
+(`deploy/Caddyfile.example`) is the single process that may face the internet.
+The exposure table, limits and the remaining gaps are in
+`docs/SECURITY_DEPLOYMENT.md`; the full VPS runbook - including what was and was
+not verified, and the host/proxy problems a Windows workstation adds - is
+`docs/PRODUCTION_DEPLOYMENT.md`.
 
-## Next Steps
+## Development
 
-- Add persistent storage for chat history
-- Implement custom tools for your agent
-- Enhance the UI with additional features
-- Deploy to production using LangGraph Platform
+```bash
+uv sync
+uv run python -m compileall src scripts
+uv run ruff check src scripts tests
+uv run ruff format --check src scripts tests
+uv run mypy src/react_agent --strict
+uv run pytest tests/unit_tests -q
+```
 
-For more examples and detailed documentation:
-- [LangGraph Documentation](https://langchain-ai.github.io/langgraph)
-- [FastHTML Documentation](https://fasthtml.readme.io)
-- [DaisyUI Components](https://daisyui.com/components)
+Verification scripts (real model calls, they read `.env`):
 
-
-<!--
-Configuration auto-generated by `langgraph template lock`. DO NOT EDIT MANUALLY.
-{
-  "config_schemas": {
-    "agent": {
-      "type": "object",
-      "properties": {
-        "model": {
-          "type": "string",
-          "default": "anthropic/claude-3-5-sonnet-20240620",
-          "description": "The name of the language model to use for the agent's main interactions. Should be in the form: provider/model-name.",
-          "environment": [
-            {
-              "value": "anthropic/claude-1.2",
-              "variables": "ANTHROPIC_API_KEY"
-            },
-            {
-              "value": "anthropic/claude-2.0",
-              "variables": "ANTHROPIC_API_KEY"
-            },
-            {
-              "value": "anthropic/claude-2.1",
-              "variables": "ANTHROPIC_API_KEY"
-            },
-            {
-              "value": "anthropic/claude-3-5-sonnet-20240620",
-              "variables": "ANTHROPIC_API_KEY"
-            },
-            {
-              "value": "anthropic/claude-3-haiku-20240307",
-              "variables": "ANTHROPIC_API_KEY"
-            },
-            {
-              "value": "anthropic/claude-3-opus-20240229",
-              "variables": "ANTHROPIC_API_KEY"
-            },
-            {
-              "value": "anthropic/claude-3-sonnet-20240229",
-              "variables": "ANTHROPIC_API_KEY"
-            },
-            {
-              "value": "anthropic/claude-instant-1.2",
-              "variables": "ANTHROPIC_API_KEY"
-            },
-            {
-              "value": "openai/gpt-3.5-turbo",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-3.5-turbo-0125",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-3.5-turbo-0301",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-3.5-turbo-0613",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-3.5-turbo-1106",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-3.5-turbo-16k",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-3.5-turbo-16k-0613",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-0125-preview",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-0314",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-0613",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-1106-preview",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-32k",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-32k-0314",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-32k-0613",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-turbo",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-turbo-preview",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4-vision-preview",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4o",
-              "variables": "OPENAI_API_KEY"
-            },
-            {
-              "value": "openai/gpt-4o-mini",
-              "variables": "OPENAI_API_KEY"
-            }
-          ]
-        }
-      },
-      "environment": [
-        "TAVILY_API_KEY"
-      ]
-    }
-  }
-}
--->
+```bash
+uv run --env-file .env python scripts/verify_single_agent.py
+uv run --env-file .env python scripts/verify_structured_output.py
+uv run --env-file .env python scripts/verify_multi_agent.py
+uv run --env-file .env python scripts/verify_rag.py
+uv run --env-file .env python scripts/verify_critic.py
+uv run python scripts/inspect_stream.py --url http://127.0.0.1:2024
+```

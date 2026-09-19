@@ -1,0 +1,64 @@
+# Local rehearsal of the production proxy layer (no Docker, no domain).
+#
+# Runs the same allowlist, headers and SSE settings as deploy/Caddyfile.example
+# against the app on 127.0.0.1:8123, but on loopback only:
+#
+#   .tools/caddy.exe run --config deploy/Caddyfile.localhost.example
+#
+# Then verify through the proxy:
+#
+#   curl -k -si https://localhost:8443/threads | head -1        # 404
+#   curl -k -si https://localhost:8443/openapi.json | head -1    # 404
+#   curl -si  http://localhost:8080/ | head -1                   # 308 -> https
+#   uv run python scripts/smoke_local.py \
+#       --url https://localhost:8443 --token "$LANGGRAPH_DEMO_API_TOKEN" \
+#       --insecure --behind-proxy
+#
+# `bind 127.0.0.1` keeps the listener off the LAN, so nothing is exposed by
+# running this. The certificate is Caddy's internal CA: browsers warn unless you
+# accept it once, and `skip_install_trust` stops Caddy from touching the OS
+# trust store (which would need administrator rights on Windows).
+
+{
+	skip_install_trust
+}
+
+https://localhost:8443 {
+	bind 127.0.0.1
+	tls internal
+
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	}
+
+	@internal path /threads* /runs* /assistants* /store* /mcp* /docs* /redoc* /openapi.json /info /ok /metrics /internal* /deploy* /ui* /a2a* /.well-known/*
+	handle @internal {
+		respond "Not Found" 404
+	}
+
+	@web path / /new-thread /health /evaluation /static/* /conversations/*
+	handle @web {
+		reverse_proxy 127.0.0.1:8123 {
+			flush_interval -1
+			transport http {
+				read_timeout 300s
+				write_timeout 300s
+			}
+		}
+	}
+
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+http://localhost:8080 {
+	bind 127.0.0.1
+	redir https://localhost:8443{uri} permanent
+}

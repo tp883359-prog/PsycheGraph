@@ -1,11 +1,14 @@
-"""Run the public Phase 3 examples against the real single-agent graph.
+"""Re-run the Phase 3 single-agent baseline examples against the current graph.
 
 Run from the project root with:
     uv run --env-file .env python scripts/verify_single_agent.py
 
-This makes six real model requests. It prints only the synthetic examples and
-their answers. Review the answers manually; transport success is not a semantic
-pass. No model, environment, or exception payload is printed.
+Since Phase 5 the exported graph is the multi-agent pipeline
+(Supervisor -> three Specialists -> Synthesizer), so one request now costs about
+five model calls instead of one. The prompts and the case list are unchanged:
+this script still checks that the baseline behaviour (limited interpretation,
+refusal to diagnose, no fabricated quotations) survives the split into agents.
+It prints only the synthetic examples and their answers.
 """
 
 # Public synthetic responses are the intended output of this manual-check CLI.
@@ -35,12 +38,22 @@ async def main() -> None:
     from react_agent import graph
 
     topology = graph.get_graph()
-    assert set(topology.nodes) == {"__start__", "agent", "__end__"}
-    assert {(edge.source, edge.target) for edge in topology.edges} == {
-        ("__start__", "agent"),
-        ("agent", "__end__"),
+    assert set(topology.nodes) == {
+        "__start__",
+        "supervisor",
+        "freudian",
+        "object_relations",
+        "lacanian",
+        "synthesizer",
+        "__end__",
     }
-    print("Single-agent topology verified.", flush=True)
+    specialists = {"freudian", "object_relations", "lacanian"}
+    edges = {(edge.source, edge.target) for edge in topology.edges}
+    assert {target for source, target in edges if source == "supervisor"} == specialists
+    assert {
+        source for source, target in edges if target == "synthesizer"
+    } == specialists
+    print("Phase 5 topology verified.", flush=True)
 
     histories = {}
     for label, text in CASES:

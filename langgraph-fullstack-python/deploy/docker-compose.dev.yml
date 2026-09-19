@@ -1,0 +1,57 @@
+# Demo-grade stack: PsycheGraph in a container on the free development runtime.
+#
+# Use this when no LangGraph Platform licence / LangSmith key is available.
+# The application behaviour is the same as the official stack - same image
+# contents, same auth, same limits, same RAG, same web UI - but:
+#
+#   * there is NO LangGraph API licence involved (see docker/Dockerfile.dev);
+#   * there is NO PostgreSQL and NO Redis: the in-memory runtime keeps threads,
+#     checkpoints and runs inside the process, so `docker compose restart`
+#     starts from an empty conversation list. That is a real functional
+#     difference from the official stack, not a detail.
+#   * it is a development server and must not be presented as production.
+#
+# Start:
+#   docker compose -f deploy/docker-compose.dev.yml --env-file .env up -d
+# Smoke test:
+#   uv run python scripts/smoke_local.py --url http://127.0.0.1:8123 --token "$LANGGRAPH_DEMO_API_TOKEN"
+
+services:
+  psychegraph:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    image: psychegraph:dev
+    restart: unless-stopped
+    # Same `environment`-beats-`env_file` reasoning as the official compose:
+    # the developer `.env` points RAG_VECTORSTORE_PATH at a host-relative path.
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      RAG_VECTORSTORE_PATH: /data/vectorstore
+      HF_HOME: /cache/huggingface
+      HF_HUB_DISABLE_XET: "1"
+      LOG_LEVEL: INFO
+      # Shared bearer token for the API surface. Empty keeps the local demo mode
+      # (every request accepted as `default_user`); export it in the shell or
+      # put it in .env to exercise the token path, exactly like production.
+      LANGGRAPH_DEMO_API_TOKEN: ${LANGGRAPH_DEMO_API_TOKEN:-}
+      # Passed through from .env: a workstation that can only reach the internet
+      # through a local proxy needs these inside the container too (WSL2 cannot
+      # use the host's 127.0.0.1). Use http://host.docker.internal:<port>.
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,host.docker.internal}
+    ports:
+      # Loopback only: a reverse proxy (deploy/Caddyfile.example) is the one
+      # process that may face the internet.
+      - "127.0.0.1:8123:8000"
+    volumes:
+      - psychegraph-hf-dev:/cache/huggingface
+      - ../data/vectorstore:/data/vectorstore
+
+volumes:
+  psychegraph-hf-dev:
+    name: psychegraph-hf-dev
+    driver: local

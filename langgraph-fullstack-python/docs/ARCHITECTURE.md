@@ -2,7 +2,7 @@
 
 ## 1. 阅读范围与结论
 
-分析日期：2026-09-15。实际项目根目录是 `C:/Users/DJW16/Desktop/PsycheGraph/langgraph-fullstack-python`；上层 `PsycheGraph/启动项.txt` 也指向这里。因此本文位于该项目的 `docs/ARCHITECTURE.md`。
+分析日期：2026-09-15。项目根目录即仓库内的 `langgraph-fullstack-python/`，本文位于该目录下的 `docs/ARCHITECTURE.md`。
 
 当前系统是 **FastHTML 网页 + LangGraph API 服务 + 预构建 ReAct 工厂生成的单节点 StateGraph + Anthropic 聊天模型**。Graph 配置了 `tools=[]`，实际执行是一次模型响应，没有工具循环，也没有多个智能体。
 

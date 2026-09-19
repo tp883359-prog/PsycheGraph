@@ -2,7 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
-uv.lock
+
+# (uv.lock is intentionally tracked: Phase 8 evaluations must be reproducible.)
 
 # C extensions
 *.so
@@ -146,6 +147,12 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# LangGraph development runtime state (contains pickled checkpoints)
+.langgraph_api/
+
+# Local RAG artefacts (generated vector database); never committed
+data/
+
 # Pyre type checker
 .pyre/
 
@@ -161,3 +168,7 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Local tooling (caddy.exe for the proxy rehearsal); never committed
+.tools/
+
