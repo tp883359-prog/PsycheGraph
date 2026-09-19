@@ -36,16 +36,12 @@ DEFAULT_SUMMARY_PATH = Path("docs/evaluation_summary.json")
 """Where the export script writes the artifact, relative to the project root."""
 
 DISCLAIMER = (
-    "这些指标评估的是 Agent 的工程行为：Grounding、Citation Integrity、"
+    "这些数字量的是工程行为：Grounding、Citation Integrity、"
     "Theory Differentiation、Safety Boundary、Latency。"
-    "它们不代表心理诊断有效性，也不代表精神分析理论的医学有效性或临床治疗效果。"
 )
 """Explicit limits of the numbers, shown on the page."""
 
-CORPUS_NOTE = (
-    "Phase 8 的 RAG 机制评测使用项目自编测试语料（TEST FIXTURE），"
-    "不是 Freud / Klein / Lacan 原著数据库。"
-)
+CORPUS_NOTE = "评测语料 = 项目自编测试语料（TEST FIXTURE），专测 RAG 机制。"
 
 
 @dataclass(frozen=True)

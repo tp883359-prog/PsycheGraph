@@ -85,7 +85,7 @@ EventSource 只能发 GET，而消息需要 POST。流程是：
 
 这样不存在"创建 run 之后、浏览器 join 之前事件已经跑完"的经典竞态；代价是
 注册表是进程内的（见第 10 节）。当线程已有 pending 或运行中的 run 时，第二次
-POST 会返回"上一条分析还在进行中"，避免并发 run。
+POST 会返回"上一条还在跑"，避免并发 run。
 
 ## 3. WorkflowEvent 契约
 
@@ -145,8 +145,7 @@ update 因为流中断而缺失，`translator.recover()` 会从线程 checkpoint
   路径段，且当该段本身是 `C:\Users\<name>` 这类目录名时返回 None（否则会泄漏
   账号名）。`Windows 用户目录`、`Chroma` 内部字段、embedding、`retrieval_score`
   都不会出现。
-- 面板顶部固定说明："当前演示知识库使用项目自编测试材料验证 RAG 与引用机制，
-  不是 Freud / Klein / Lacan 原著数据库。"
+- 面板顶部固定说明："演示库 = 项目自编语料，专供「检索 → 引用」链路彩排。"
 
 来源描述行与生产代码完全一致：`citations.describe_card()` 复刻
 `react_agent.rag.citations.describe_source()` 的规则（作者、`《作品》`、年份、

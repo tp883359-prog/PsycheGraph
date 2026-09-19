@@ -4,7 +4,7 @@
 three-school psychoanalytic reading pipeline (Freudian / Object Relations /
 Lacanian) built on LangGraph, with a web UI that shows the agent graph working.
 
-用于理论学习、文本解释与文学 / 叙事分析。**不用于临床诊断、心理治疗或医学建议。**
+**理论沙盒 · 解读文本、拆解叙事，三路视角同时开工。**
 
 ---
 
@@ -78,6 +78,13 @@ flowchart LR
 | Tooling | `uv`, `ruff`, `mypy --strict`, `pytest` |
 
 ## Quick start
+
+**Windows one-click (demo container, no licence needed):** double-click
+`demo_up.cmd` in the repository root - it starts Docker Desktop when needed,
+brings the stack up, waits for `/health`, prewarms the embedding model and
+opens the browser. Stop it with `demo_down.cmd` (the 4.5 GB weights volume and
+the RAG index are kept, so a restart takes seconds). The manual steps below
+are still the reference for a first-time setup or a Linux host.
 
 ```bash
 pip install uv
@@ -227,6 +234,9 @@ docker build -f docker/Dockerfile.dev -t psychegraph:dev .  # measured: 2.36 GB,
 docker compose -f deploy/docker-compose.dev.yml --env-file .env up -d
 curl http://localhost:8123/health
 ```
+
+On Windows this is the same thing as double-clicking `demo_up.cmd`
+(`demo_up.cmd -SkipPrewarm -NoBrowser` for scripted runs, `demo_down.cmd` to stop).
 
 Option B keeps everything that matters for the demo - same app, auth, limits,
 RAG, web UI, SSE - but **threads and checkpoints live in process memory**, so

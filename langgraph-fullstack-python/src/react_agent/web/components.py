@@ -49,13 +49,8 @@ DELETE_PLACEHOLDER_OOB = "delete:#assistant-placeholder"
 """Out-of-band instruction that removes the waiting bubble."""
 
 BRAND_SUB = "Multi-agent psychoanalytic theory explorer"
-BRAND_NOTE = (
-    "用于理论学习、文本解释与文学/叙事分析，不用于临床诊断、心理治疗或医学建议。"
-)
-EVIDENCE_NOTE = (
-    "当前演示知识库使用项目自编测试材料验证 RAG 与引用机制，"
-    "不是 Freud / Klein / Lacan 原著数据库。"
-)
+BRAND_NOTE = "理论沙盒 · 解读文本、拆解叙事，三路视角同时开工。"
+EVIDENCE_NOTE = "演示库 = 项目自编语料，专供「检索 → 引用」链路彩排。"
 EVIDENCE_EMPTY = "发送一条消息后，这里会显示本轮检索到的理论材料。"
 EVIDENCE_SEARCHING = "正在检索本地知识库…检索完成后会按学派列出证据。"
 INPUT_HINT = (

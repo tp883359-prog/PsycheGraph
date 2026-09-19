@@ -170,7 +170,7 @@ def test_oversized_message_is_rejected_with_413(
     response = client.post(SEND_URL, data={"msg": "梦" * 11})
 
     assert response.status_code == 413
-    assert "输入太长" in response.text
+    assert "超长了" in response.text
     assert REGISTRY.take(THREAD_ID) is None
     assert fake.runs.calls == []
 
@@ -218,7 +218,7 @@ def test_rate_limit_answers_429_and_queues_nothing(
     third = client.post(SEND_URL, data={"msg": "第三条"})
 
     assert third.status_code == 429
-    assert "请求频率" in third.text
+    assert "节奏太快" in third.text
     # Only the two accepted requests were queued; the third one never entered
     # the registry (the thread keeps the earliest message because the run has
     # not started in this test).
@@ -236,7 +236,7 @@ def test_concurrency_limit_is_enforced_server_side(client: Any) -> None:
 
     assert first.status_code == 200
     assert second.status_code == 429
-    assert "同时只能有一条分析在运行" in second.text
+    assert "一次只跑一条分析" in second.text
     # The queued message is still the first one: nothing was overwritten.
     pending = REGISTRY.take(THREAD_ID)
     assert pending is not None

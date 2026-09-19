@@ -350,7 +350,7 @@ def test_workflow_panel_lists_every_phase() -> None:
         assert label in rendered
     assert "并行执行" in rendered
     assert rendered.count("未触发") >= 2
-    assert "节点状态，不含模型内部推理" in rendered
+    assert "节点遥测 · 真实耗时" in rendered
 
 
 def test_workflow_panel_states_are_text_not_only_colour() -> None:
@@ -484,7 +484,7 @@ def test_metric_specs_cover_the_required_metrics() -> None:
 
 def test_disclaimer_mentions_the_limits() -> None:
     """The page states what the numbers do not mean."""
-    assert "不代表心理诊断有效性" in DISCLAIMER
+    assert "工程行为" in DISCLAIMER
 
 
 def test_evaluation_page_renders_missing_artifact_note() -> None:

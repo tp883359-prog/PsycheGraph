@@ -121,7 +121,7 @@ def test_conversation_page_renders_three_columns(client: Any) -> None:
     body = response.text
     assert "PsycheGraph" in body
     assert "Multi-agent psychoanalytic theory explorer" in body
-    assert "不用于临床诊断" in body
+    assert "三路视角同时开工" in body
     assert 'id="chatlist"' in body
     assert 'id="workflow-panel"' in body
     assert 'id="evidence-panel"' in body
@@ -215,7 +215,7 @@ def test_second_message_while_busy_is_refused(client: Any) -> None:
     client.post(SEND_URL, data={"msg": "第一条"})
     response = client.post(SEND_URL, data={"msg": "第二条"})
     assert response.status_code == 429
-    assert "同时只能有一条分析在运行" in response.text
+    assert "一次只跑一条分析" in response.text
     assert 'id="assistant-placeholder"' not in response.text
 
 
@@ -384,7 +384,7 @@ def test_evaluation_page_without_artifact(
     assert "System / Evaluation" in body
     assert "export_evaluation_summary.py" in body
     assert "项目自编测试语料" in body
-    assert "原著数据库" in body
+    assert "TEST FIXTURE" in body
 
 
 def test_evaluation_page_with_artifact(
@@ -422,4 +422,4 @@ def test_evaluation_page_with_artifact(
     assert "3,244" in body
     assert "33,692" in body
     assert "N/A 表示该指标对该变体不适用" in body
-    assert "不代表心理诊断有效性" in body
+    assert "工程行为" in body

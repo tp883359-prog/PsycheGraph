@@ -206,7 +206,7 @@ def workflow_panel(
             Div(
                 children(
                     Span("Agent Workflow", cls="panel-title"),
-                    Span("节点状态，不含模型内部推理", cls="panel-hint"),
+                    Span("节点遥测 · 真实耗时，不含模型内心戏", cls="panel-hint"),
                 ),
                 cls="panel-head",
             ),

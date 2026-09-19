@@ -74,7 +74,7 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 ALLOWED_STATIC_ASSETS: frozenset[str] = frozenset({"htmx.min.js", "htmx-ext-sse.js"})
 """Explicit allowlist: the route never serves arbitrary files."""
 
-BUSY_MESSAGE = "上一条分析还在进行中，请等它结束后再发送。"
+BUSY_MESSAGE = "上一条还在跑，等它结束再发下一条。"
 """Shown when a thread already has a pending or running analysis."""
 
 EMPTY_MESSAGE = "请输入内容后再发送。"

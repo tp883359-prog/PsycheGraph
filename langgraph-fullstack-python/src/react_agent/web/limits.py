@@ -28,9 +28,9 @@ DEFAULT_PER_MINUTE = 6
 DEFAULT_PER_HOUR = 40
 DEFAULT_MAX_ACTIVE_RUNS = 1
 
-INPUT_TOO_LONG = "输入太长了：本演示最多接受 {limit} 个字符，请缩短后重试。"
-RATE_LIMITED = "本演示限制了请求频率（每分钟最多 {per_minute} 次，每小时 {per_hour} 次），请稍后再试。"
-CONCURRENT_LIMIT = "同时只能有一条分析在运行，请等它结束后再发送。"
+INPUT_TOO_LONG = "超长了：一次最多 {limit} 字 —— 精简一下再发。"
+RATE_LIMITED = "节奏太快：每分钟 {per_minute} 次 / 每小时 {per_hour} 次，稍等再来。"
+CONCURRENT_LIMIT = "一次只跑一条分析 —— 等这条跑完再发。"
 
 
 def _env_int(name: str, default: int) -> int:
