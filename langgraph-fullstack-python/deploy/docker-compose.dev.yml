@@ -32,6 +32,12 @@ services:
       RAG_VECTORSTORE_PATH: /data/vectorstore
       HF_HOME: /cache/huggingface
       HF_HUB_DISABLE_XET: "1"
+      # Offline by default: the weights already live in the named volume, and the
+      # hub metadata checks (one HEAD per config file, five retries each) stall
+      # startup by roughly two minutes whenever huggingface.co is unreachable.
+      # Set HF_HUB_OFFLINE=0 in .env for the very first download - demo_up.ps1
+      # does that automatically when the cache is still empty.
+      HF_HUB_OFFLINE: ${HF_HUB_OFFLINE:-1}
       LOG_LEVEL: INFO
       # Shared bearer token for the API surface. Empty keeps the local demo mode
       # (every request accepted as `default_user`); export it in the shell or
